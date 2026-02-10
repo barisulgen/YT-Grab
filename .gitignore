@@ -20,6 +20,9 @@
 # production
 /build
 
+# yt-dlp binary
+/bin
+
 # misc
 .DS_Store
 *.pem

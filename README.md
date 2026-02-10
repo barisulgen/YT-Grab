@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# yt-grab
+
+A local web app for downloading YouTube videos and playlists as MP3 files. Paste a URL, pick the videos you want, choose a folder, and download.
+
+## Features
+
+- **Playlist & single video support** — works with any YouTube URL
+- **Video metadata preview** — see titles, thumbnails, durations, and uploaders before downloading
+- **Selective download** — checkboxes with select/deselect all to pick exactly which videos to grab
+- **Filter** — search within a playlist by title
+- **Real-time progress** — per-video download status streamed via SSE
+- **Browse for output folder** — visual folder picker with create-folder support
+- **Playlist subfolder** — downloading multiple videos auto-creates a folder named after the playlist
+- **Auto-open folder** — opens the output folder in your file explorer when downloads finish
+- **Stop downloads** — cancel in-progress downloads at any time
+- **Zero system dependencies** — `npm install` handles everything (yt-dlp binary + ffmpeg)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+git clone <repo-url>
+cd yt-grab
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`npm install` automatically downloads the yt-dlp binary and installs a bundled ffmpeg — no system-level setup required.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Usage
 
-## Learn More
+1. Paste a YouTube playlist or video URL into the input field
+2. Click **Fetch** to load video info
+3. Select which videos to download using the checkboxes
+4. Click **Browse** to choose an output folder (defaults to your Downloads folder)
+5. Click **Download** and watch progress in real-time
+6. The output folder opens automatically when all downloads finish
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Next.js](https://nextjs.org) 16 (App Router, Turbopack)
+- [Tailwind CSS](https://tailwindcss.com) v4
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) via [yt-dlp-wrap](https://www.npmjs.com/package/yt-dlp-wrap)
+- [@ffmpeg-installer/ffmpeg](https://www.npmjs.com/package/@ffmpeg-installer/ffmpeg)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── page.tsx                  # Main page (URL input, video list, download)
+│   ├── layout.tsx                # Root layout
+│   └── api/
+│       ├── playlist/route.ts     # Fetch video/playlist metadata
+│       ├── download/route.ts     # Download videos as MP3 (SSE progress)
+│       ├── health/route.ts       # Dependency availability check
+│       ├── browse/route.ts       # List/create directories for folder picker
+│       └── open-folder/route.ts  # Open folder in system file explorer
+├── components/
+│   ├── PlaylistInput.tsx         # URL input + fetch button
+│   ├── VideoList.tsx             # Video list with select all/filter
+│   ├── VideoItem.tsx             # Single video row
+│   ├── DownloadBar.tsx           # Download/stop button + progress bar
+│   ├── FolderPicker.tsx          # Output folder input + browse button
+│   ├── FolderBrowserModal.tsx    # Visual folder browser modal
+│   └── DependencyBanner.tsx      # Warning banner if deps are missing
+├── lib/
+│   └── ytdlp.ts                  # yt-dlp wrapper (metadata + download)
+└── types/
+    └── index.ts                  # Shared TypeScript types
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

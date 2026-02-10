@@ -1,65 +1,291 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useCallback, useEffect, useRef } from "react";
+import type { PlaylistInfo, DownloadProgress } from "@/types";
+import PlaylistInput from "@/components/PlaylistInput";
+import VideoList from "@/components/VideoList";
+import DownloadBar from "@/components/DownloadBar";
+import DependencyBanner from "@/components/DependencyBanner";
+
+interface DepCheck {
+  ready: boolean;
+  dependencies: {
+    ytdlp: { available: boolean; version: string | null };
+    ffmpeg: { available: boolean; version: string | null };
+  };
+  downloadsPath: string;
+}
 
 export default function Home() {
+  const [depCheck, setDepCheck] = useState<DepCheck | null>(null);
+  const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [outputDir, setOutputDir] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [progressMap, setProgressMap] = useState<Map<string, DownloadProgress>>(new Map());
+  const [doneCount, setDoneCount] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then((res) => res.json())
+      .then((data: DepCheck) => {
+        setDepCheck(data);
+        if (data.downloadsPath) {
+          setOutputDir(data.downloadsPath);
+        }
+      })
+      .catch(() =>
+        setDepCheck({
+          ready: false,
+          dependencies: {
+            ytdlp: { available: false, version: null },
+            ffmpeg: { available: false, version: null },
+          },
+          downloadsPath: "",
+        })
+      );
+  }, []);
+
+  const handleFetch = useCallback(async (url: string) => {
+    setLoading(true);
+    setError(null);
+    setPlaylist(null);
+    setSelectedIds(new Set());
+    setProgressMap(new Map());
+    setDoneCount(0);
+
+    try {
+      const res = await fetch(`/api/playlist?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch");
+      }
+
+      const info = data as PlaylistInfo;
+      setPlaylist(info);
+      // Select all by default
+      setSelectedIds(new Set(info.videos.map((v) => v.id)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleToggle = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (playlist) {
+      setSelectedIds(new Set(playlist.videos.map((v) => v.id)));
+    }
+  }, [playlist]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    if (!playlist || selectedIds.size === 0 || !outputDir.trim()) return;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setDownloading(true);
+    setDoneCount(0);
+    setError(null);
+
+    const selectedVideos = playlist.videos
+      .filter((v) => selectedIds.has(v.id))
+      .map((v) => ({ id: v.id, url: v.url, title: v.title }));
+
+    // Initialize progress
+    const initialProgress = new Map<string, DownloadProgress>();
+    for (const v of selectedVideos) {
+      initialProgress.set(v.id, {
+        videoId: v.id,
+        title: v.title,
+        status: "queued",
+        progress: 0,
+      });
+    }
+    setProgressMap(initialProgress);
+
+    try {
+      const res = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videos: selectedVideos, outputDir: outputDir.trim(), playlistTitle: playlist.title }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Download failed");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const dataLine = line.replace(/^data: /, "").trim();
+          if (!dataLine) continue;
+
+          try {
+            const event = JSON.parse(dataLine);
+
+            if (event.type === "complete" && event.path) {
+              fetch("/api/open-folder", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: event.path }),
+              }).catch(() => {});
+              continue;
+            }
+
+            if (event.videoId) {
+              setProgressMap((prev) => {
+                const next = new Map(prev);
+                const existing = next.get(event.videoId);
+                next.set(event.videoId, {
+                  videoId: event.videoId,
+                  title: existing?.title || event.title || "",
+                  status: event.status,
+                  progress: event.progress ?? 0,
+                  error: event.error,
+                });
+                return next;
+              });
+
+              if (event.status === "done") {
+                completed++;
+                setDoneCount(completed);
+              }
+            }
+          } catch {
+            // skip malformed event
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User clicked Stop — not an error
+      } else {
+        setError(err instanceof Error ? err.message : "Download failed");
+      }
+    } finally {
+      abortRef.current = null;
+      setDownloading(false);
+    }
+  }, [playlist, selectedIds, outputDir]);
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="flex min-h-screen flex-col">
+      {/* Header */}
+      <header className="w-full bg-[#151514]">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/yt-grab-logo.png"
+            alt="yt-grab"
+            className="h-10 w-10"
+          />
+          <div>
+            <h1 className="text-xl font-bold text-white">yt-grab</h1>
+            <p className="text-xs text-red-200">Download YouTube videos as MP3</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-4 py-8">
+
+      {/* Dependency check */}
+      {depCheck && !depCheck.ready && (
+        <DependencyBanner dependencies={depCheck.dependencies} />
+      )}
+
+      {/* URL Input */}
+      <PlaylistInput onFetch={handleFetch} loading={loading} error={error} />
+
+      {/* How to use */}
+      {!playlist && !loading && (
+        <div className="mt-8 w-full rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-800/50">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            How to use
+          </h3>
+          <ol className="mt-2 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <li>1. Paste a YouTube video or playlist URL above and click <strong className="text-zinc-700 dark:text-zinc-300">Fetch</strong></li>
+            <li>2. Select the videos you want to download</li>
+            <li>3. Choose an output folder and click <strong className="text-zinc-700 dark:text-zinc-300">Download</strong></li>
+          </ol>
+          <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
+            Files are saved as MP3. The output folder opens automatically when done.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      )}
+
+      {/* Playlist info + video list */}
+      {playlist && (
+        <div className="mt-6 w-full space-y-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              {playlist.title}
+            </h2>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              {playlist.videoCount} video{playlist.videoCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          <VideoList
+            videos={playlist.videos}
+            selectedIds={selectedIds}
+            onToggle={handleToggle}
+            onSelectAll={handleSelectAll}
+            onDeselectAll={handleDeselectAll}
+            progressMap={progressMap}
+          />
+
+          <DownloadBar
+            selectedCount={selectedIds.size}
+            outputDir={outputDir}
+            onOutputDirChange={setOutputDir}
+            onDownload={handleDownload}
+            onStop={handleStop}
+            downloading={downloading}
+            overallProgress={{ done: doneCount, total: selectedIds.size }}
+          />
         </div>
-      </main>
+      )}
+      </div>
     </div>
   );
 }
