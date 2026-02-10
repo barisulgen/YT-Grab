@@ -2,6 +2,8 @@
 
 A local web app for downloading YouTube videos and playlists as MP3 files. Paste a URL, pick the videos you want, choose a folder, and download.
 
+<img width="432" height="435" alt="yt-grab-logo" src="https://github.com/user-attachments/assets/09ff0f31-2f0d-468e-890e-074ea6c472d6" />
+
 ## Features
 
 - **Playlist & single video support** — works with any YouTube URL
