@@ -83,19 +83,24 @@ function isPlaylistUrl(url: string): boolean {
   }
 }
 
+function validString(val: unknown): string | null {
+  if (typeof val === "string" && val.length > 0 && val !== "None" && val !== "NA") return val;
+  return null;
+}
+
 function parseVideoEntry(data: Record<string, unknown>): VideoInfo {
-  const id = (data.id as string) || "";
-  const duration = (data.duration as number) || 0;
+  const id = validString(data.id) || "";
+  const duration = (typeof data.duration === "number" ? data.duration : 0) || 0;
   return {
     id,
-    title: (data.title as string) || "Unknown Title",
+    title: validString(data.title) || "Unknown Title",
     duration,
     durationFormatted: formatDuration(Math.round(duration)),
     thumbnail:
-      (data.thumbnail as string) ||
+      validString(data.thumbnail) ||
       `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-    url: (data.webpage_url as string) || (data.url as string) || `https://www.youtube.com/watch?v=${id}`,
-    uploader: (data.uploader as string) || (data.channel as string) || "Unknown",
+    url: validString(data.webpage_url) || validString(data.url) || `https://www.youtube.com/watch?v=${id}`,
+    uploader: validString(data.uploader) || validString(data.channel) || "Unknown",
   };
 }
 

@@ -13,6 +13,8 @@ interface VideoListProps {
   progressMap: Map<string, DownloadProgress>;
 }
 
+type SortKey = "default" | "name-asc" | "name-desc" | "length-asc" | "length-desc";
+
 export default function VideoList({
   videos,
   selectedIds,
@@ -22,6 +24,7 @@ export default function VideoList({
   progressMap,
 }: VideoListProps) {
   const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("default");
 
   const filteredVideos = filter
     ? videos.filter((v) =>
@@ -29,6 +32,17 @@ export default function VideoList({
         v.uploader.toLowerCase().includes(filter.toLowerCase())
       )
     : videos;
+
+  const sortedVideos = sortBy === "default"
+    ? filteredVideos
+    : [...filteredVideos].sort((a, b) => {
+        switch (sortBy) {
+          case "name-asc": return a.title.localeCompare(b.title);
+          case "name-desc": return b.title.localeCompare(a.title);
+          case "length-asc": return a.duration - b.duration;
+          case "length-desc": return b.duration - a.duration;
+        }
+      });
 
   const allSelected = videos.length > 0 && selectedIds.size === videos.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < videos.length;
@@ -61,18 +75,31 @@ export default function VideoList({
           </span>
         </div>
 
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by title..."
-          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-1 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
-        />
+        <div className="flex items-center gap-2">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-1 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <option value="default">Original order</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="length-asc">Shortest first</option>
+            <option value="length-desc">Longest first</option>
+          </select>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by title..."
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-1 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
+          />
+        </div>
       </div>
 
       {/* Video list */}
       <div className="flex max-h-[480px] flex-col gap-2 overflow-y-auto pr-1">
-        {filteredVideos.map((video) => (
+        {sortedVideos.map((video) => (
           <VideoItem
             key={video.id}
             video={video}
@@ -81,7 +108,7 @@ export default function VideoList({
             progress={progressMap.get(video.id)}
           />
         ))}
-        {filteredVideos.length === 0 && (
+        {sortedVideos.length === 0 && (
           <p className="py-8 text-center text-sm text-zinc-400">
             No videos match your filter.
           </p>
