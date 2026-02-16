@@ -1,90 +1,111 @@
 # yt-grab
 
-A web app for downloading YouTube videos and playlists as MP3 files. Paste a URL, pick the videos you want, and download.
+Download YouTube videos and playlists as MP3 files. Paste a URL, pick the videos you want, and download — right from your browser.
 
 <img width="432" height="435" alt="yt-grab-logo" src="https://github.com/user-attachments/assets/09ff0f31-2f0d-468e-890e-074ea6c472d6" />
 
 ## Features
 
-- **Playlist & single video support** — works with any YouTube URL
-- **Video metadata preview** — see titles, thumbnails, durations, and uploaders before downloading
-- **Selective download** — checkboxes with select/deselect all to pick exactly which videos to grab
+- **Playlist & single video support** — paste any YouTube URL
+- **Video metadata** — titles, thumbnails, durations, uploaders
+- **Selective download** — checkboxes with select all / deselect all
 - **Filter & sort** — search by title, sort by name or length
-- **Video preview** — click a thumbnail to preview the video inline
-- **Real-time progress** — per-video download status streamed via SSE
-- **Playlist ZIP** — multiple videos are zipped into a single download
-- **Stop downloads** — cancel in-progress downloads at any time
-- **Zero system dependencies** — `npm install` handles everything (yt-dlp binary + ffmpeg)
+- **Video preview** — click any thumbnail to preview inline
+- **Real-time progress** — per-video status via server-sent events
+- **Playlist ZIP** — multiple videos download as a single ZIP file
+- **Stop button** — cancel downloads at any time
 
-## Getting Started
-
-### Local development
+## Run it locally
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/barisulgen/YT-Grab.git
 cd yt-grab
 npm install
 npm run dev
 ```
 
-This starts both the server (port 3000) and the client dev server (port 5173). Open [http://localhost:5173](http://localhost:5173).
+Opens at [localhost:5173](http://localhost:5173). `npm install` auto-downloads yt-dlp and ffmpeg.
 
-`npm install` automatically downloads the yt-dlp binary and installs a bundled ffmpeg.
+## How it works
 
-### Production (Docker)
+```
+Browser (React SPA)
+    |
+    | fetch /api/playlist?url=...     → video metadata
+    | POST  /api/download             → SSE progress stream
+    | GET   /api/download/file/:id    → MP3 or ZIP file
+    |
+Express server (yt-dlp + ffmpeg)
+```
+
+1. Client sends a YouTube URL to the server
+2. Server runs `yt-dlp` to fetch metadata and returns video info
+3. User selects videos and clicks Download
+4. Server downloads each video, converts to MP3, streams progress via SSE
+5. When done, single videos serve as MP3; playlists get zipped
+6. Browser receives the file as a standard download
+
+## Deployment
+
+### Railway (recommended)
+
+1. Fork or push this repo to GitHub
+2. Create a new project on [Railway](https://railway.app)
+3. Connect your GitHub repo — Railway auto-detects the `Dockerfile`
+4. Generate a public domain under **Service Settings > Networking**
+5. Done
+
+### Docker
 
 ```bash
 docker build -t yt-grab .
 docker run -p 3000:3000 yt-grab
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+### Local development
 
-### Deploy to Railway
+```bash
+npm install        # installs client + server deps, downloads yt-dlp
+npm run dev        # starts server (3000) + client (5173) concurrently
+```
 
-1. Push this repo to GitHub
-2. Connect it to [Railway](https://railway.app)
-3. Railway auto-detects the Dockerfile and deploys
-
-## Usage
-
-1. Paste a YouTube playlist or video URL into the input field
-2. Click **Fetch** to load video info
-3. Select which videos to download using the checkboxes
-4. Click **Download** and watch progress in real-time
-5. Your browser downloads the MP3 file (or a ZIP for playlists)
+The Vite dev server proxies `/api/*` requests to the Express server.
 
 ## Tech Stack
 
-- **Client**: [React](https://react.dev) + [Vite](https://vite.dev) + [Tailwind CSS](https://tailwindcss.com) v4
-- **Server**: [Express.js](https://expressjs.com)
-- **Download engine**: [yt-dlp](https://github.com/yt-dlp/yt-dlp) + [ffmpeg](https://ffmpeg.org)
+| Layer | Technology |
+|-------|-----------|
+| Client | React 19, Vite 6, Tailwind CSS v4, TypeScript |
+| Server | Express 5, Node.js 22, TypeScript |
+| Download | yt-dlp, ffmpeg |
+| Deploy | Docker (multi-stage), Railway |
 
 ## Project Structure
 
 ```
 yt-grab/
-├── client/                        # Vite + React SPA
+├── client/                        # React SPA
 │   ├── src/
-│   │   ├── App.tsx                # Main app with state management
+│   │   ├── App.tsx                # Main app + state management
 │   │   ├── components/
 │   │   │   ├── PlaylistInput.tsx  # URL input + fetch button
-│   │   │   ├── VideoList.tsx      # Video list with select all/filter/sort
-│   │   │   ├── VideoItem.tsx      # Single video row with preview
-│   │   │   └── DownloadBar.tsx    # Download/stop button + progress bar
-│   │   └── types/index.ts        # Shared TypeScript types
+│   │   │   ├── VideoList.tsx      # Video list with filter/sort
+│   │   │   ├── VideoItem.tsx      # Video row with inline preview
+│   │   │   └── DownloadBar.tsx    # Download/stop + progress bar
+│   │   └── types/index.ts
 │   └── public/yt-grab-logo.png
-├── server/                        # Express.js API
+├── server/                        # Express API
 │   ├── src/
-│   │   ├── index.ts               # Entry point (serves client + API)
+│   │   ├── index.ts               # Entry point (API + static files)
 │   │   ├── routes/
-│   │   │   ├── playlist.ts        # Fetch video/playlist metadata
-│   │   │   └── download.ts        # Download as MP3/ZIP (SSE progress)
+│   │   │   ├── playlist.ts        # GET /api/playlist
+│   │   │   └── download.ts        # POST /api/download + GET /api/download/file/:id
 │   │   ├── lib/ytdlp.ts           # yt-dlp wrapper
 │   │   └── types/index.ts
-│   └── scripts/postinstall.mjs    # Auto-download yt-dlp binary
-├── Dockerfile                     # Multi-stage build for deployment
-└── package.json                   # Root workspace orchestrator
+│   └── scripts/postinstall.mjs    # Auto-downloads yt-dlp binary
+├── Dockerfile                     # Multi-stage build
+├── package.json                   # Root orchestrator
+└── README.md
 ```
 
 ## License
