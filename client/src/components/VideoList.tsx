@@ -39,6 +39,7 @@ export default function VideoList({
           case "name-desc": return b.title.localeCompare(a.title);
           case "length-asc": return a.duration - b.duration;
           case "length-desc": return b.duration - a.duration;
+          default: return 0;
         }
       });
 

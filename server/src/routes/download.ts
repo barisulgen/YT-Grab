@@ -9,6 +9,12 @@ import archiver from "archiver";
 
 const router = Router();
 
+const MAX_VIDEOS = 100;
+const VALID_HOSTS = [
+  "www.youtube.com", "youtube.com", "m.youtube.com",
+  "youtu.be", "music.youtube.com",
+];
+
 interface PendingDownload {
   filePath: string;
   filename: string;
@@ -30,14 +36,23 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000);
 
+// Cleanup orphaned temp dirs from previous runs
+const ytGrabTempDir = path.join(os.tmpdir(), "yt-grab");
+readdir(ytGrabTempDir).then(async (dirs) => {
+  for (const dir of dirs) {
+    await rm(path.join(ytGrabTempDir, dir), { recursive: true, force: true }).catch(() => {});
+  }
+}).catch(() => { /* dir doesn't exist yet */ });
+
 function slugify(text: string): string {
-  return text
+  const slug = text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_");
+  return slug || "playlist";
 }
 
 // POST /api/download — SSE stream with progress, then "ready" event
@@ -50,6 +65,25 @@ router.post("/", async (req, res) => {
   if (!videos || !Array.isArray(videos) || videos.length === 0) {
     res.status(400).json({ error: "No videos provided" });
     return;
+  }
+
+  if (videos.length > MAX_VIDEOS) {
+    res.status(400).json({ error: `Maximum ${MAX_VIDEOS} videos per download` });
+    return;
+  }
+
+  // Validate all URLs are YouTube
+  for (const video of videos) {
+    try {
+      const parsed = new URL(video.url);
+      if (!VALID_HOSTS.includes(parsed.hostname)) {
+        res.status(400).json({ error: `Invalid video URL: ${video.url}` });
+        return;
+      }
+    } catch {
+      res.status(400).json({ error: `Invalid URL format: ${video.url}` });
+      return;
+    }
   }
 
   // SSE headers
@@ -134,7 +168,7 @@ router.post("/", async (req, res) => {
     sendEvent({ type: "ready", downloadId, filename });
   } else {
     // Multiple files — create zip
-    const zipName = playlistTitle ? `${slugify(playlistTitle)}.zip` : "playlist.zip";
+    const zipName = `${slugify(playlistTitle || "playlist")}.zip`;
     const zipPath = path.join(tempDir, zipName);
 
     await new Promise<void>((resolve, reject) => {
@@ -166,6 +200,9 @@ router.get("/file/:id", async (req, res) => {
     return;
   }
 
+  // Remove from map immediately to prevent double-serving
+  pendingDownloads.delete(id);
+
   try {
     const stats = await stat(download.filePath);
     res.setHeader("Content-Length", stats.size);
@@ -175,9 +212,17 @@ router.get("/file/:id", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`);
 
     const stream = createReadStream(download.filePath);
+
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to read file" });
+      }
+    });
+
     stream.pipe(res);
-    stream.on("end", async () => {
-      pendingDownloads.delete(id);
+
+    // Clean up temp dir after response is fully sent
+    res.on("close", async () => {
       const parentDir = path.dirname(download.filePath);
       await rm(parentDir, { recursive: true, force: true }).catch(() => {});
     });

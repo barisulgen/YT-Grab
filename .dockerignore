@@ -1,8 +1,4 @@
 node_modules
 .git
 .next
-*.md
-bin
-src
-scripts
 .claude

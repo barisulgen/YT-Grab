@@ -202,6 +202,7 @@ export function downloadVideo(
       "--audio-quality", "0",
       "--ffmpeg-location", ffmpegPath,
       "-o", `${outputDir}/%(title)s.%(ext)s`,
+      "--restrict-filenames",
       "--no-warnings",
       "--newline",
       videoUrl,
