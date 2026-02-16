@@ -34,6 +34,12 @@ function getFfmpegPath(): string {
 const ytDlpPath = getYtDlpPath();
 const ffmpegPath = getFfmpegPath();
 
+// Common flags to help bypass YouTube datacenter IP blocking
+const YT_BYPASS_FLAGS = [
+  "--extractor-args", "youtube:player_client=web",
+  "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+];
+
 /** Turn raw yt-dlp error output into a short, human-readable message. */
 function friendlyError(raw: string): string {
   const s = raw.toLowerCase();
@@ -127,6 +133,7 @@ async function fetchSingleVideoInfo(url: string): Promise<PlaylistInfo> {
     "--no-download",
     "--no-warnings",
     "--ffmpeg-location", ffmpegPath,
+    ...YT_BYPASS_FLAGS,
     url,
   ], { maxBuffer: 10 * 1024 * 1024 });
 
@@ -146,6 +153,7 @@ async function fetchPlaylistInfo(url: string): Promise<PlaylistInfo> {
     "--dump-json",
     "--no-warnings",
     "--ffmpeg-location", ffmpegPath,
+    ...YT_BYPASS_FLAGS,
     url,
   ], { maxBuffer: 50 * 1024 * 1024 });
 
@@ -231,6 +239,7 @@ export function downloadVideo(
       "--restrict-filenames",
       "--no-warnings",
       "--newline",
+      ...YT_BYPASS_FLAGS,
       videoUrl,
     ]);
 
