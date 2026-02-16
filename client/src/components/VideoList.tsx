@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import type { VideoInfo, DownloadProgress } from "@/types";
 import VideoItem from "./VideoItem";

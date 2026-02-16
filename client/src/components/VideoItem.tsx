@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import type { VideoInfo, DownloadProgress } from "@/types";
 
@@ -54,7 +52,6 @@ export default function VideoItem({ video, selected, onToggle, progress }: Video
           className="group relative h-16 w-28 shrink-0 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-700"
           title={previewing ? "Close preview" : "Preview video"}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={thumbSrc}
             alt={video.title}

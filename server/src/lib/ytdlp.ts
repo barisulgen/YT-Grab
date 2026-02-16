@@ -1,9 +1,14 @@
 import { existsSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
-import type { VideoInfo, PlaylistInfo } from "@/types";
+import { fileURLToPath } from "url";
+import { createRequire } from "module";
+import type { VideoInfo, PlaylistInfo } from "../types/index.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
 
 // Resolve paths to bundled binaries
@@ -11,13 +16,15 @@ function getYtDlpPath(): string {
   const binaryName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
   const localPath = join(process.cwd(), "bin", binaryName);
   if (existsSync(localPath)) return localPath;
+  // Also check relative to server root (for monorepo layout)
+  const serverBinPath = join(__dirname, "..", "..", "bin", binaryName);
+  if (existsSync(serverBinPath)) return serverBinPath;
   // Fallback to system PATH
   return "yt-dlp";
 }
 
 function getFfmpegPath(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("@ffmpeg-installer/ffmpeg").path;
   } catch {
     return "ffmpeg";
@@ -55,7 +62,6 @@ function friendlyError(raw: string): string {
   // Try to extract just the "ERROR:" line from yt-dlp output
   const errorLine = raw.match(/ERROR:\s*(.+)/i);
   if (errorLine) {
-    // Strip the bracket prefix like "[youtube:tab] ID:"
     const cleaned = errorLine[1].replace(/\[[\w:]+\]\s*[\w-]+:\s*/, "").trim();
     if (cleaned.length > 0 && cleaned.length < 200) return cleaned;
   }

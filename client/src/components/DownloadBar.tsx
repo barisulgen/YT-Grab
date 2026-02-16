@@ -1,11 +1,5 @@
-"use client";
-
-import FolderPicker from "./FolderPicker";
-
 interface DownloadBarProps {
   selectedCount: number;
-  outputDir: string;
-  onOutputDirChange: (dir: string) => void;
   onDownload: () => void;
   onStop: () => void;
   downloading: boolean;
@@ -14,8 +8,6 @@ interface DownloadBarProps {
 
 export default function DownloadBar({
   selectedCount,
-  outputDir,
-  onOutputDirChange,
   onDownload,
   onStop,
   downloading,
@@ -28,12 +20,6 @@ export default function DownloadBar({
 
   return (
     <div className="w-full space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <FolderPicker
-        value={outputDir}
-        onChange={onOutputDirChange}
-        disabled={downloading}
-      />
-
       <div className="flex items-center gap-3">
         {downloading ? (
           <>
@@ -50,7 +36,7 @@ export default function DownloadBar({
         ) : (
           <button
             onClick={onDownload}
-            disabled={selectedCount === 0 || !outputDir.trim()}
+            disabled={selectedCount === 0}
             className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Download {selectedCount} video{selectedCount !== 1 ? "s" : ""}
