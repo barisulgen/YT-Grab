@@ -14,3 +14,4 @@ server/dist/
 .DS_Store
 *.pem
 npm-debug.log*
+.claude/settings.local.json
