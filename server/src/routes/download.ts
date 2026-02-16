@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { downloadVideo } from "../lib/ytdlp.js";
+import { downloadVideo, type AudioFormat, type AudioQuality } from "../lib/ytdlp.js";
 import { v4 as uuidv4 } from "uuid";
 import { mkdir, readdir, rm, stat } from "fs/promises";
 import { createReadStream, createWriteStream } from "fs";
@@ -57,10 +57,15 @@ function slugify(text: string): string {
 
 // POST /api/download — SSE stream with progress, then "ready" event
 router.post("/", async (req, res) => {
-  const { videos, playlistTitle } = req.body as {
+  const { videos, playlistTitle, format, quality } = req.body as {
     videos: { id: string; url: string; title: string }[];
     playlistTitle?: string;
+    format?: AudioFormat;
+    quality?: AudioQuality;
   };
+
+  const audioFormat: AudioFormat = (["mp3", "flac", "wav", "aac"] as const).includes(format as AudioFormat) ? format as AudioFormat : "mp3";
+  const audioQuality: AudioQuality = (["128", "192", "320"] as const).includes(quality as AudioQuality) ? quality as AudioQuality : "128";
 
   if (!videos || !Array.isArray(videos) || videos.length === 0) {
     res.status(400).json({ error: "No videos provided" });
@@ -134,7 +139,7 @@ router.post("/", async (req, res) => {
         onDone: (videoId) => {
           sendEvent({ videoId, status: "done", progress: 100 });
         },
-      }, abortController.signal);
+      }, abortController.signal, { format: audioFormat, quality: audioQuality });
     } catch {
       if (aborted) break;
     }
@@ -147,11 +152,12 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  // Gather downloaded MP3 files
+  // Gather downloaded audio files
+  const audioExtensions = [`.${audioFormat}`, ".mp3", ".flac", ".wav", ".aac", ".m4a"];
   const files = await readdir(tempDir);
-  const mp3Files = files.filter(f => f.endsWith(".mp3"));
+  const audioFiles = files.filter(f => audioExtensions.some(ext => f.endsWith(ext)));
 
-  if (mp3Files.length === 0) {
+  if (audioFiles.length === 0) {
     sendEvent({ type: "error", error: "No files were downloaded successfully" });
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});
     res.end();
@@ -160,9 +166,9 @@ router.post("/", async (req, res) => {
 
   const downloadId = uuidv4();
 
-  if (mp3Files.length === 1) {
+  if (audioFiles.length === 1) {
     // Single file — serve directly
-    const filename = mp3Files[0];
+    const filename = audioFiles[0];
     const filePath = path.join(tempDir, filename);
     pendingDownloads.set(downloadId, { filePath, filename, createdAt: Date.now() });
     sendEvent({ type: "ready", downloadId, filename });
@@ -177,7 +183,7 @@ router.post("/", async (req, res) => {
       output.on("close", resolve);
       archive.on("error", reject);
       archive.pipe(output);
-      for (const mp3 of mp3Files) {
+      for (const mp3 of audioFiles) {
         archive.file(path.join(tempDir, mp3), { name: mp3 });
       }
       archive.finalize();
@@ -206,9 +212,16 @@ router.get("/file/:id", async (req, res) => {
   try {
     const stats = await stat(download.filePath);
     res.setHeader("Content-Length", stats.size);
-    res.setHeader("Content-Type", download.filename.endsWith(".zip")
-      ? "application/zip"
-      : "audio/mpeg");
+    const contentTypeMap: Record<string, string> = {
+      ".mp3": "audio/mpeg",
+      ".flac": "audio/flac",
+      ".wav": "audio/wav",
+      ".aac": "audio/aac",
+      ".m4a": "audio/mp4",
+      ".zip": "application/zip",
+    };
+    const ext = download.filename.substring(download.filename.lastIndexOf("."));
+    res.setHeader("Content-Type", contentTypeMap[ext] || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(download.filename)}"`);
 
     const stream = createReadStream(download.filePath);

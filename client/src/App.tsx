@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import type { PlaylistInfo, DownloadProgress } from "@/types";
 import PlaylistInput from "@/components/PlaylistInput";
 import VideoList from "@/components/VideoList";
-import DownloadBar from "@/components/DownloadBar";
+import DownloadBar, { type AudioFormat, type AudioQuality } from "@/components/DownloadBar";
 
 export default function App() {
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
@@ -12,6 +12,9 @@ export default function App() {
   const [downloading, setDownloading] = useState(false);
   const [progressMap, setProgressMap] = useState<Map<string, DownloadProgress>>(new Map());
   const [doneCount, setDoneCount] = useState(0);
+  const [format, setFormat] = useState<AudioFormat>("mp3");
+  const [quality, setQuality] = useState<AudioQuality>("128");
+  const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const handleFetch = useCallback(async (url: string) => {
@@ -92,7 +95,12 @@ export default function App() {
       const res = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videos: selectedVideos, playlistTitle: playlist.title }),
+        body: JSON.stringify({
+          videos: selectedVideos,
+          playlistTitle: playlist.title,
+          format,
+          quality,
+        }),
         signal: controller.signal,
       });
 
@@ -168,14 +176,47 @@ export default function App() {
       abortRef.current = null;
       setDownloading(false);
     }
-  }, [playlist, selectedIds]);
+  }, [playlist, selectedIds, format, quality]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
+  // Extract a YouTube URL from drag/drop or paste data
+  function extractYouTubeUrl(text: string): string | null {
+    const match = text.match(/https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be|music\.youtube\.com)\S+/i);
+    return match ? match[0] : null;
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text/uri-list");
+    const url = extractYouTubeUrl(text);
+    if (url && !loading) {
+      handleFetch(url);
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    // Only reset if leaving the container (not entering a child)
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragging(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <div
+      className="flex min-h-screen flex-col"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
       {/* Header */}
       <header className="w-full bg-[#151514]">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
@@ -192,6 +233,16 @@ export default function App() {
       </header>
 
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-4 py-8">
+        {/* Drag overlay */}
+        {dragging && (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="rounded-xl border-2 border-dashed border-red-400 bg-zinc-900/90 px-12 py-8 text-center">
+              <p className="text-lg font-semibold text-white">Drop YouTube URL here</p>
+              <p className="mt-1 text-sm text-zinc-400">Video or playlist link</p>
+            </div>
+          </div>
+        )}
+
         {/* URL Input */}
         <PlaylistInput onFetch={handleFetch} loading={loading} error={error} />
 
@@ -202,12 +253,12 @@ export default function App() {
               How to use
             </h3>
             <ol className="mt-2 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
-              <li>1. Paste a YouTube video or playlist URL above and click <strong className="text-zinc-700 dark:text-zinc-300">Fetch</strong></li>
+              <li>1. Paste or drag a YouTube URL above and click <strong className="text-zinc-700 dark:text-zinc-300">Fetch</strong></li>
               <li>2. Select the videos you want to download</li>
-              <li>3. Click <strong className="text-zinc-700 dark:text-zinc-300">Download</strong></li>
+              <li>3. Choose format and quality, then click <strong className="text-zinc-700 dark:text-zinc-300">Download</strong></li>
             </ol>
             <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
-              Files download to your browser as MP3. Playlists are zipped into a single file.
+              Supports MP3, FLAC, WAV, and AAC. Playlists are zipped into a single file.
             </p>
           </div>
         )}
@@ -235,6 +286,10 @@ export default function App() {
 
             <DownloadBar
               selectedCount={selectedIds.size}
+              format={format}
+              quality={quality}
+              onFormatChange={setFormat}
+              onQualityChange={setQuality}
               onDownload={handleDownload}
               onStop={handleStop}
               downloading={downloading}

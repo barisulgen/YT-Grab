@@ -181,13 +181,39 @@ export interface DownloadCallbacks {
   onDone: (videoId: string) => void;
 }
 
+export type AudioFormat = "mp3" | "flac" | "wav" | "aac";
+export type AudioQuality = "128" | "192" | "320";
+
+export interface DownloadOptions {
+  format?: AudioFormat;
+  quality?: AudioQuality;
+}
+
+// Map quality string to yt-dlp --audio-quality value (VBR scale: 0=best, 9=worst)
+// For CBR formats we use --postprocessor-args instead
+function getQualityArgs(format: AudioFormat, quality: AudioQuality): string[] {
+  if (format === "flac" || format === "wav") {
+    // Lossless formats — quality setting doesn't apply
+    return ["--audio-quality", "0"];
+  }
+  // For mp3/aac, use postprocessor args to set exact bitrate
+  return [
+    "--audio-quality", "0",
+    "--postprocessor-args", `ffmpeg:-b:a ${quality}k`,
+  ];
+}
+
 export function downloadVideo(
   videoUrl: string,
   videoId: string,
   outputDir: string,
   callbacks: DownloadCallbacks,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: DownloadOptions
 ): Promise<void> {
+  const format = options?.format || "mp3";
+  const quality = options?.quality || "128";
+
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new Error("Cancelled"));
@@ -198,8 +224,8 @@ export function downloadVideo(
 
     const proc = spawn(ytDlpPath, [
       "-x",
-      "--audio-format", "mp3",
-      "--audio-quality", "0",
+      "--audio-format", format,
+      ...getQualityArgs(format, quality),
       "--ffmpeg-location", ffmpegPath,
       "-o", `${outputDir}/%(title)s.%(ext)s`,
       "--restrict-filenames",
