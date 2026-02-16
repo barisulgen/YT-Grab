@@ -36,7 +36,7 @@ const ffmpegPath = getFfmpegPath();
 
 // Common flags to help bypass YouTube datacenter IP blocking
 const YT_BYPASS_FLAGS = [
-  "--extractor-args", "youtube:player_client=web",
+  "--extractor-args", "youtube:player_client=web_creator",
   "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 ];
 
@@ -132,6 +132,7 @@ async function fetchSingleVideoInfo(url: string): Promise<PlaylistInfo> {
     "--dump-json",
     "--no-download",
     "--no-warnings",
+    "--ignore-no-formats-error",
     "--ffmpeg-location", ffmpegPath,
     ...YT_BYPASS_FLAGS,
     url,
@@ -152,6 +153,7 @@ async function fetchPlaylistInfo(url: string): Promise<PlaylistInfo> {
     "--flat-playlist",
     "--dump-json",
     "--no-warnings",
+    "--ignore-no-formats-error",
     "--ffmpeg-location", ffmpegPath,
     ...YT_BYPASS_FLAGS,
     url,
