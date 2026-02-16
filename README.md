@@ -23,10 +23,12 @@ cd yt-grab
 npm install
 npm run dev
 ```
+Opens at [localhost:5173](http://localhost:5173). `npm install` auto-downloads yt-dlp and ffmpeg.
+
+
 <img width="875" height="886" alt="image" src="https://github.com/user-attachments/assets/8bcc9ada-5be9-4f47-ad16-6790e04189ab" />
 <img width="852" height="879" alt="image" src="https://github.com/user-attachments/assets/71e30841-4c95-49c1-8bec-02cb31dfa3b7" />
 
-Opens at [localhost:5173](http://localhost:5173). `npm install` auto-downloads yt-dlp and ffmpeg.
 
 ## How it works
 
