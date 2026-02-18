@@ -1,18 +1,13 @@
 import { NextRequest } from "next/server";
 import { downloadVideo, type AudioFormat, type AudioQuality } from "@/lib/ytdlp";
 import { pendingDownloads } from "@/lib/downloads";
+import { VALID_YOUTUBE_HOSTS, MAX_VIDEOS_PER_DOWNLOAD } from "@/lib/constants";
 import { mkdir, readdir, rm } from "fs/promises";
 import { createWriteStream } from "fs";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
 import archiver from "archiver";
-
-const MAX_VIDEOS = 100;
-const VALID_HOSTS = [
-  "www.youtube.com", "youtube.com", "m.youtube.com",
-  "youtu.be", "music.youtube.com",
-];
 
 function slugify(text: string): string {
   const slug = text
@@ -23,6 +18,13 @@ function slugify(text: string): string {
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_");
   return slug || "playlist";
+}
+
+function jsonError(message: string, status = 400) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -37,21 +39,21 @@ export async function POST(request: NextRequest) {
   const audioQuality: AudioQuality = (["128", "192", "320"] as const).includes(quality as AudioQuality) ? quality as AudioQuality : "128";
 
   if (!videos || !Array.isArray(videos) || videos.length === 0) {
-    return new Response(JSON.stringify({ error: "No videos provided" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return jsonError("No videos provided");
   }
 
-  if (videos.length > MAX_VIDEOS) {
-    return new Response(JSON.stringify({ error: `Maximum ${MAX_VIDEOS} videos per download` }), { status: 400, headers: { "Content-Type": "application/json" } });
+  if (videos.length > MAX_VIDEOS_PER_DOWNLOAD) {
+    return jsonError(`Maximum ${MAX_VIDEOS_PER_DOWNLOAD} videos per download`);
   }
 
   for (const video of videos) {
     try {
       const parsed = new URL(video.url);
-      if (!VALID_HOSTS.includes(parsed.hostname)) {
-        return new Response(JSON.stringify({ error: `Invalid video URL: ${video.url}` }), { status: 400, headers: { "Content-Type": "application/json" } });
+      if (!VALID_YOUTUBE_HOSTS.includes(parsed.hostname)) {
+        return jsonError(`Invalid video URL: ${video.url}`);
       }
     } catch {
-      return new Response(JSON.stringify({ error: `Invalid URL format: ${video.url}` }), { status: 400, headers: { "Content-Type": "application/json" } });
+      return jsonError(`Invalid URL format: ${video.url}`);
     }
   }
 
