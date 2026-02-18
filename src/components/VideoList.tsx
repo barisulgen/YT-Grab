@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import type { VideoInfo, DownloadProgress } from "@/types";
 import VideoItem from "./VideoItem";
@@ -48,7 +50,6 @@ export default function VideoList({
 
   return (
     <div className="w-full">
-      {/* Header */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
@@ -96,7 +97,6 @@ export default function VideoList({
         </div>
       </div>
 
-      {/* Video list */}
       <div className="flex max-h-[480px] flex-col gap-2 overflow-y-auto pr-1">
         {sortedVideos.map((video) => (
           <VideoItem

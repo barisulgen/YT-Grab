@@ -1,14 +1,11 @@
 node_modules/
-dist/
+.next/
 .env*
 *.tsbuildinfo
+next-env.d.ts
 
 # yt-dlp binary (downloaded by postinstall)
-server/bin/
-
-# build artifacts
-client/dist/
-server/dist/
+/bin
 
 # misc
 .DS_Store

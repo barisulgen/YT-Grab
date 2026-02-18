@@ -1,3 +1,5 @@
+"use client";
+
 export type AudioFormat = "mp3" | "flac" | "wav" | "aac";
 export type AudioQuality = "128" | "192" | "320";
 
@@ -40,7 +42,6 @@ export default function DownloadBar({
 
   return (
     <div className="w-full space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-      {/* Format & quality selectors */}
       {!downloading && (
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -75,7 +76,6 @@ export default function DownloadBar({
         </div>
       )}
 
-      {/* Download / stop + progress */}
       <div className="flex items-center gap-3">
         {downloading ? (
           <>

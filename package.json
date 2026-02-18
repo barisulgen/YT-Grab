@@ -1,18 +1,28 @@
 {
   "name": "yt-grab",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
-    "dev:client": "cd client && npm run dev",
-    "dev:server": "cd server && npm run dev",
-    "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "build:client": "cd client && npm run build",
-    "build:server": "cd server && npm run build",
-    "build": "npm run build:client && npm run build:server",
-    "start": "cd server && npm start",
-    "postinstall": "cd client && npm install && cd ../server && npm install"
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "node scripts/postinstall.mjs"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "archiver": "^7.0.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "yt-dlp-wrap": "^2.3.12"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0"
+    "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^6.0.0",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
